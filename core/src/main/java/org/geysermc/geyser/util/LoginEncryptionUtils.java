@@ -39,6 +39,8 @@ import org.geysermc.cumulus.form.SimpleForm;
 import org.geysermc.cumulus.response.SimpleFormResponse;
 import org.geysermc.cumulus.response.result.FormResponseResult;
 import org.geysermc.cumulus.response.result.ValidFormResponseResult;
+import com.google.gson.JsonObject;
+import com.google.gson.JsonParser;
 import org.geysermc.geyser.GeyserImpl;
 import org.geysermc.geyser.session.GeyserSession;
 import org.geysermc.geyser.session.auth.AuthData;
@@ -46,14 +48,32 @@ import org.geysermc.geyser.session.auth.BedrockClientData;
 import org.geysermc.geyser.text.ChatColor;
 import org.geysermc.geyser.text.GeyserLocale;
 
+import org.jose4j.jws.JsonWebSignature;
+import org.jose4j.jwt.JwtClaims;
+
 import javax.crypto.SecretKey;
 import java.net.InetSocketAddress;
+import java.nio.charset.StandardCharsets;
+import java.security.KeyFactory;
 import java.security.KeyPair;
 import java.security.PublicKey;
+import java.security.Signature;
+import java.security.spec.X509EncodedKeySpec;
+import java.util.Base64;
 import java.util.function.BiConsumer;
 
 public class LoginEncryptionUtils {
     private static boolean HAS_SENT_ENCRYPTION_MESSAGE = false;
+
+    /**
+     * MESS (Minecraft Education Server Services) RSA-1024 public key for verifying server tokens.
+     * Retrieved from https://dedicatedserver.minecrafteduservices.com/public_keys/signing
+     * Used to verify the signature on pipe-separated server tokens: tenantId|oid|expiry|signature
+     */
+    private static final String MESS_SIGNING_KEY_BASE64 =
+            "MIGfMA0GCSqGSIb3DQEBAQUAA4GNADCBiQKBgQDsFCr3nD8N3TJxJZ7Y4g1Z20Son+fUWTSd2f" +
+            "/XyIil2mGGGx/yjRj6l0ntbROsec8MZoaLsBG0nWm9/WhJcdXvJewbdd+mCyy7WXyYQgJcJPZP" +
+            "3kgBDySZMUnaowlUmR9gxRr+LevCafZKQwb19nwJB0EUt+nQsWBbTe2SuIdCqQIDAQAB";
 
     public static void encryptPlayerConnection(GeyserSession session, LoginPacket loginPacket) {
         encryptConnectionWithCert(session, loginPacket.getAuthPayload(), loginPacket.getClientJwt());
@@ -65,12 +85,7 @@ public class LoginEncryptionUtils {
 
             ChainValidationResult result = EncryptionUtils.validatePayload(authPayload);
 
-            geyser.getLogger().debug(String.format("Is player data signed? %s", result.signed()));
-
-            if (!result.signed() && session.getGeyser().config().advanced().bedrock().validateBedrockLogin()) {
-                session.disconnect(GeyserLocale.getLocaleStringLog("geyser.network.remote.invalid_xbox_account"));
-                return;
-            }
+            geyser.getLogger().debug("Is player data signed? %s", result.signed());
 
             // Should always be present, but hey, why not make it safe :D
             Long rawIssuedAt = (Long) result.rawIdentityClaims().get("iat");
@@ -95,8 +110,52 @@ public class LoginEncryptionUtils {
             data.setOriginalString(jwt);
             session.setClientData(data);
 
+            // Education Edition clients use self-signed login chains (no Xbox Live),
+            // so result.signed() is always false for them. We must detect edu clients
+            // before the Xbox validation check to avoid rejecting them.
+            boolean isEducationClient = data.isEducationEdition();
+
+            // Xbox validation: reject unsigned non-edu clients when validation is enabled
+            if (!result.signed() && !isEducationClient && session.getGeyser().config().advanced().bedrock().validateBedrockLogin()) {
+                session.disconnect(GeyserLocale.getLocaleStringLog("geyser.network.remote.invalid_xbox_account"));
+                return;
+            }
+
+            // Handle Education Edition: extract and verify the MESS-signed server token
+            if (isEducationClient) {
+                session.setEducationClient(true);
+
+                // Extract the server token from the EduTokenChain JWT
+                String eduTokenChain = data.getEduTokenChain();
+                String serverToken = extractServerTokenFromEduTokenChain(eduTokenChain);
+
+                if (serverToken != null) {
+                    String[] tokenParts = serverToken.split("\\|");
+                    if (tokenParts.length >= 4) {
+                        session.setEducationTenantId(tokenParts[0]);
+
+                        // Verify the MESS signature on the server token
+                        if (!verifyEducationServerToken(serverToken)) {
+                            geyser.getLogger().warning("[EduAuth] Rejected: invalid MESS signature on server token");
+                            session.disconnect("Education Edition Connection Failed\n\nYour education token could not be verified.");
+                            return;
+                        }
+
+                        // Store the verified token for echoing back in the handshake
+                        session.setEducationServerToken(serverToken);
+                        geyser.getLogger().debug("[EduAuth] Education client verified: tenant=%s, oid=%s",
+                                tokenParts[0], tokenParts[1]);
+                    }
+                } else {
+                    geyser.getLogger().debug("[EduAuth] Education client connected without EduTokenChain");
+                }
+            }
+
             IdentityData extraData = result.identityClaims().extraData;
-            String xuid = extraData.xuid;
+            // For education clients, use the MESS-verified oid as xuid
+            String xuid = isEducationClient && session.getEducationServerToken() != null
+                    ? session.getEducationServerToken().split("\\|")[1]
+                    : extraData.xuid;
             if (geyser.config().advanced().bedrock().useWaterdogpeForwarding()) {
                 String waterdogIp = data.getWaterdogIp();
                 String waterdogXuid = data.getWaterdogXuid();
@@ -111,6 +170,7 @@ public class LoginEncryptionUtils {
                     return;
                 }
             }
+
             session.setAuthData(new AuthData(extraData.displayName, extraData.identity, xuid, issuedAt, extraData.minecraftId));
 
             try {
@@ -133,12 +193,94 @@ public class LoginEncryptionUtils {
         KeyPair serverKeyPair = EncryptionUtils.createKeyPair();
         byte[] token = EncryptionUtils.generateRandomToken();
 
-        ServerToClientHandshakePacket packet = new ServerToClientHandshakePacket();
-        packet.setJwt(EncryptionUtils.createHandshakeJwt(serverKeyPair, token));
-        session.sendUpstreamPacketImmediately(packet);
+        String jwt;
+        if (session.isEducationClient() && session.getEducationServerToken() != null) {
+            // Education: echo the client's MESS-signed server token back in the handshake JWT
+            JsonWebSignature jws = new JsonWebSignature();
+            jws.setAlgorithmHeaderValue("ES384");
+            jws.setHeader("x5u", Base64.getEncoder().encodeToString(
+                serverKeyPair.getPublic().getEncoded()));
+            jws.setKey(serverKeyPair.getPrivate());
+
+            JwtClaims claims = new JwtClaims();
+            claims.setClaim("salt", Base64.getEncoder().encodeToString(token));
+            claims.setClaim("signedToken", session.getEducationServerToken());
+            jws.setPayload(claims.toJson());
+            jwt = jws.getCompactSerialization();
+        } else {
+            jwt = EncryptionUtils.createHandshakeJwt(serverKeyPair, token);
+        }
 
         SecretKey encryptionKey = EncryptionUtils.getSecretKey(serverKeyPair.getPrivate(), key, token);
+
+        ServerToClientHandshakePacket packet = new ServerToClientHandshakePacket();
+        packet.setJwt(jwt);
+        session.sendUpstreamPacketImmediately(packet);
         session.getUpstream().getSession().enableEncryption(encryptionKey);
+    }
+
+    /**
+     * Extract the pipe-separated server token from the client's EduTokenChain JWT.
+     */
+    private static String extractServerTokenFromEduTokenChain(String eduTokenChain) {
+        if (eduTokenChain == null || eduTokenChain.isEmpty()) {
+            return null;
+        }
+        try {
+            String[] jwtParts = eduTokenChain.split("\\.");
+            if (jwtParts.length < 2) {
+                return null;
+            }
+            String padded = jwtParts[1];
+            while (padded.length() % 4 != 0) padded += "=";
+            String payloadJson = new String(Base64.getUrlDecoder().decode(padded), StandardCharsets.UTF_8);
+            JsonObject payload = JsonParser.parseString(payloadJson).getAsJsonObject();
+            if (!payload.has("chain")) {
+                return null;
+            }
+            String chain = payload.get("chain").getAsString();
+            String[] parts = chain.split("\\|");
+            if (parts.length < 4) {
+                return null;
+            }
+            return chain;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * Verify the MESS signature on an education server token.
+     * Token format: tenantId|oid|expiry|hexSignature
+     * Algorithm: RSA PKCS#1 v1.5 with SHA-256 using the MESS signing key.
+     */
+    private static boolean verifyEducationServerToken(String serverToken) {
+        try {
+            int lastPipe = serverToken.lastIndexOf('|');
+            if (lastPipe < 0) return false;
+
+            String signedData = serverToken.substring(0, lastPipe);
+            String signatureHex = serverToken.substring(lastPipe + 1);
+            byte[] signatureBytes = hexToBytes(signatureHex);
+
+            byte[] keyBytes = Base64.getDecoder().decode(MESS_SIGNING_KEY_BASE64);
+            PublicKey messKey = KeyFactory.getInstance("RSA").generatePublic(new X509EncodedKeySpec(keyBytes));
+
+            Signature sig = Signature.getInstance("SHA256withRSA");
+            sig.initVerify(messKey);
+            sig.update(signedData.getBytes(StandardCharsets.UTF_8));
+            return sig.verify(signatureBytes);
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    private static byte[] hexToBytes(String hex) {
+        byte[] bytes = new byte[hex.length() / 2];
+        for (int i = 0; i < bytes.length; i++) {
+            bytes[i] = (byte) Integer.parseInt(hex.substring(i * 2, i * 2 + 2), 16);
+        }
+        return bytes;
     }
 
     private static void sendEncryptionFailedMessage(GeyserImpl geyser) {

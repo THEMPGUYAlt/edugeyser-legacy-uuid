@@ -155,6 +155,7 @@ import org.geysermc.geyser.item.type.BlockItem;
 import org.geysermc.geyser.level.BedrockDimension;
 import org.geysermc.geyser.level.JavaDimension;
 import org.geysermc.geyser.level.physics.CollisionManager;
+import org.geysermc.geyser.network.EducationCodecProcessor;
 import org.geysermc.geyser.network.netty.LocalSession;
 import org.geysermc.geyser.registry.Registries;
 import org.geysermc.geyser.registry.type.BlockMappings;
@@ -645,6 +646,36 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
     private boolean reducedDebugInfo = false;
 
     /**
+     * Whether this client is Minecraft Education Edition.
+     * Determined from BedrockClientData.isEducationEdition(), which reads the IsEduMode claim in the client JWT.
+     */
+    @Getter @Setter
+    private boolean educationClient = false;
+
+    /**
+     * The tenant ID extracted from the EduTokenChain JWT payload.
+     * This is the real, cryptographically signed tenant ID. Do NOT use
+     * BedrockClientData.getTenantId() as it is always null for edu clients.
+     */
+    @Getter @Setter
+    private @Nullable String educationTenantId = null;
+
+    /**
+     * SHA256 hash of the converted skin RGBA bytes, returned by the signing relay.
+     * Used to match SKIN_UPLOADED WebSocket responses for education players,
+     * since the xuid in the response belongs to the relay's donor account.
+     */
+    @Getter @Setter
+    private @Nullable String educationSkinHash = null;
+
+    /**
+     * The MESS-signed server token extracted from the client's EduTokenChain.
+     * Echoed back in the handshake JWT for education clients.
+     */
+    @Getter @Setter
+    private @Nullable String educationServerToken = null;
+
+    /**
      * The op permission level set by the server
      */
     @Setter
@@ -945,7 +976,7 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
         // We disable the locator bar until we are certain that the server wants us to enable it
         // See WaypointCache for details
         gamerulePacket.getGameRules().add(new GameRuleData<>("locatorBar", false));
-        
+
         upstream.sendPacket(gamerulePacket);
     }
 
@@ -1822,7 +1853,25 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
         startGamePacket.setScenarioId("");
         startGamePacket.setOwnerId("");
 
+        // Disable Code Builder for education clients — it's unsupported on Java servers
+        // and would cause an illegal packet disconnect if the client opens it.
+        if (educationClient) {
+            startGamePacket.getGamerules().add(new GameRuleData<>("codebuilder", false));
+        }
+
+        // For Education clients, set the education codec permanently for this session.
+        // It only differs in StartGamePacket serialization (appends 3 extra edu strings);
+        // all other packets use identical serializers. Encoding is deferred to Netty's
+        // event loop, so we can't swap temporarily; it must stay active.
+        if (educationClient) {
+            upstream.getSession().setCodec(EducationCodecProcessor.educationCodec(upstream.getSession().getCodec()));
+            // setCodec() creates a new codec helper, wiping registries. Re-set them.
+            upstream.getCodecHelper().setItemDefinitions(this.itemMappings);
+            upstream.getCodecHelper().setBlockDefinitions(this.blockMappings);
+            upstream.getCodecHelper().setCameraPresetDefinitions(CameraDefinitions.CAMERA_DEFINITIONS);
+        }
         upstream.sendPacket(startGamePacket);
+
     }
 
     /**
