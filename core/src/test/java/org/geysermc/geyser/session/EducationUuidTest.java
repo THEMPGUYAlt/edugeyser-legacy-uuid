@@ -37,105 +37,95 @@ class EducationUuidTest {
 
     private static final long EXPECTED_MSB = 0x0000000100000001L;
 
+    // Real OIDs from test accounts
+    private static final String OID_1 = "bb1430cb-bdcf-48b0-bd66-4b58bbb0a9dd";
+    private static final String OID_2 = "1c309846-d918-41a5-b5a7-200a274f3599";
+
     @Test
     void msbIsAlwaysFixed() {
-        UUID uuid = GeyserSessionAdapter.createEducationUuid("tenant-abc", "student1");
+        UUID uuid = GeyserSessionAdapter.createEducationUuid(OID_1);
         assertEquals(EXPECTED_MSB, uuid.getMostSignificantBits());
     }
 
     @Test
-    void msbFixedAcrossInputs() {
-        String[] tenants = {"tenant-a", "tenant-b", "tenant-c"};
-        String[] users = {"alice", "bob", "charlie"};
-        for (String tenant : tenants) {
-            for (String user : users) {
-                UUID uuid = GeyserSessionAdapter.createEducationUuid(tenant, user);
-                assertEquals(EXPECTED_MSB, uuid.getMostSignificantBits(),
-                        "MSB mismatch for tenant=" + tenant + ", user=" + user);
-            }
+    void msbFixedAcrossOids() {
+        for (int i = 0; i < 100; i++) {
+            String oid = UUID.randomUUID().toString();
+            UUID uuid = GeyserSessionAdapter.createEducationUuid(oid);
+            assertEquals(EXPECTED_MSB, uuid.getMostSignificantBits(),
+                    "MSB mismatch for OID=" + oid);
         }
     }
 
     @Test
-    void sameInputsProduceSameUuid() {
-        UUID first = GeyserSessionAdapter.createEducationUuid("tenant-xyz", "player1");
-        UUID second = GeyserSessionAdapter.createEducationUuid("tenant-xyz", "player1");
+    void sameOidProducesSameUuid() {
+        UUID first = GeyserSessionAdapter.createEducationUuid(OID_1);
+        UUID second = GeyserSessionAdapter.createEducationUuid(OID_1);
         assertEquals(first, second);
     }
 
     @Test
-    void deterministic_acrossInvocations() {
-        // Call many times, always same result
-        UUID expected = GeyserSessionAdapter.createEducationUuid("stable-tenant", "stable-user");
+    void deterministicAcrossInvocations() {
+        UUID expected = GeyserSessionAdapter.createEducationUuid(OID_1);
         for (int i = 0; i < 100; i++) {
-            assertEquals(expected, GeyserSessionAdapter.createEducationUuid("stable-tenant", "stable-user"));
+            assertEquals(expected, GeyserSessionAdapter.createEducationUuid(OID_1));
         }
     }
 
     @Test
-    void differentTenantsProduceDifferentUuids() {
-        UUID a = GeyserSessionAdapter.createEducationUuid("tenant-a", "same-user");
-        UUID b = GeyserSessionAdapter.createEducationUuid("tenant-b", "same-user");
+    void differentOidsProduceDifferentUuids() {
+        UUID a = GeyserSessionAdapter.createEducationUuid(OID_1);
+        UUID b = GeyserSessionAdapter.createEducationUuid(OID_2);
         assertNotEquals(a, b);
     }
 
     @Test
-    void differentUsernamesProduceDifferentUuids() {
-        UUID a = GeyserSessionAdapter.createEducationUuid("same-tenant", "user-a");
-        UUID b = GeyserSessionAdapter.createEducationUuid("same-tenant", "user-b");
-        assertNotEquals(a, b);
-    }
-
-    @Test
-    void completelyDifferentInputsProduceDifferentUuids() {
-        UUID a = GeyserSessionAdapter.createEducationUuid("tenant-1", "alice");
-        UUID b = GeyserSessionAdapter.createEducationUuid("tenant-2", "bob");
-        assertNotEquals(a, b);
-    }
-
-    @Test
-    void noCollisionsAcrossManyInputs() {
+    void noCollisionsAcrossManyOids() {
         Set<UUID> seen = new HashSet<>();
-        for (int t = 0; t < 50; t++) {
-            for (int u = 0; u < 50; u++) {
-                UUID uuid = GeyserSessionAdapter.createEducationUuid("tenant-" + t, "user-" + u);
-                assertTrue(seen.add(uuid),
-                        "Collision detected for tenant-" + t + "/user-" + u);
-            }
+        for (int i = 0; i < 10000; i++) {
+            String oid = UUID.randomUUID().toString();
+            UUID uuid = GeyserSessionAdapter.createEducationUuid(oid);
+            assertTrue(seen.add(uuid), "Collision detected for OID=" + oid);
         }
-        assertEquals(2500, seen.size());
+        assertEquals(10000, seen.size());
     }
 
     @Test
     void lsbDiffersFromMsb() {
-        UUID uuid = GeyserSessionAdapter.createEducationUuid("any-tenant", "any-user");
-        // LSB is derived from SHA-256, extremely unlikely to equal the fixed MSB
+        UUID uuid = GeyserSessionAdapter.createEducationUuid(OID_1);
         assertNotEquals(uuid.getMostSignificantBits(), uuid.getLeastSignificantBits());
     }
 
     @Test
-    void swappedInputsProduceDifferentUuids() {
-        // "tenant:user" != "user:tenant" — the colon separator prevents ambiguity
-        UUID a = GeyserSessionAdapter.createEducationUuid("foo", "bar");
-        UUID b = GeyserSessionAdapter.createEducationUuid("bar", "foo");
-        assertNotEquals(a, b);
+    void lsbContainsOnlyRandomBits() {
+        // The LSB is derived from the OID's first 64 random bits (bits 0-69,
+        // skipping version at 48-51 and variant at 64-65). Changing a byte
+        // within this range must change the result.
+        String base =    "bb1430cb-bdcf-48b0-bd66-4b58bbb0a9dd";
+        String tweaked = "cc1430cb-bdcf-48b0-bd66-4b58bbb0a9dd"; // first byte changed
+        UUID a = GeyserSessionAdapter.createEducationUuid(base);
+        UUID b = GeyserSessionAdapter.createEducationUuid(tweaked);
+        assertNotEquals(a.getLeastSignificantBits(), b.getLeastSignificantBits());
     }
 
     @Test
-    void emptyInputsStillWork() {
-        // Edge case: empty strings shouldn't throw
-        UUID uuid = GeyserSessionAdapter.createEducationUuid("", "");
-        assertNotNull(uuid);
-        assertEquals(EXPECTED_MSB, uuid.getMostSignificantBits());
+    void versionAndVariantBitsAreStripped() {
+        // Two UUIDs with identical random bits but different version/variant
+        // should produce the SAME education UUID, since those bits are stripped.
+        String v4 = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee"; // version=4, variant=8 (10xx)
+        String v5 = "aaaaaaaa-bbbb-5ccc-cddd-eeeeeeeeeeee"; // version=5, variant=c (11xx)
+        UUID a = GeyserSessionAdapter.createEducationUuid(v4);
+        UUID b = GeyserSessionAdapter.createEducationUuid(v5);
+        assertEquals(a, b, "Version/variant bits should be stripped — same random bits should produce same UUID");
     }
 
     @Test
-    void specialCharactersInInputs() {
-        UUID uuid = GeyserSessionAdapter.createEducationUuid(
-                "4cf5151d-0705-4be5-839d-fa2abe1b4206",
-                "Student With Spaces & Special!@#"
-        );
-        assertNotNull(uuid);
-        assertEquals(EXPECTED_MSB, uuid.getMostSignificantBits());
+    void realOidsProduceValidUuids() {
+        // Verify with the real OIDs from our test accounts
+        UUID uuid1 = GeyserSessionAdapter.createEducationUuid(OID_1);
+        UUID uuid2 = GeyserSessionAdapter.createEducationUuid(OID_2);
+        assertEquals(EXPECTED_MSB, uuid1.getMostSignificantBits());
+        assertEquals(EXPECTED_MSB, uuid2.getMostSignificantBits());
+        assertNotEquals(uuid1, uuid2);
     }
 }

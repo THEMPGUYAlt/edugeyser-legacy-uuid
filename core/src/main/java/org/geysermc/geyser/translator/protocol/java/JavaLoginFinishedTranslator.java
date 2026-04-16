@@ -29,6 +29,7 @@ import net.kyori.adventure.key.Key;
 import org.geysermc.geyser.api.network.AuthType;
 import org.geysermc.geyser.entity.type.player.PlayerEntity;
 import org.geysermc.geyser.session.GeyserSession;
+import org.geysermc.geyser.session.GeyserSessionAdapter;
 import org.geysermc.geyser.skin.SkinManager;
 import org.geysermc.geyser.translator.protocol.PacketTranslator;
 import org.geysermc.geyser.translator.protocol.Translator;
@@ -58,7 +59,7 @@ public class JavaLoginFinishedTranslator extends PacketTranslator<ClientboundLog
 
         // Check if they are not using a linked account
         long msb = playerEntity.uuid().getMostSignificantBits();
-        if (remoteAuthType == AuthType.OFFLINE || msb == 0 || msb == 0x0000000100000001L) {
+        if (remoteAuthType == AuthType.OFFLINE || msb == 0 || msb == GeyserSessionAdapter.EDUCATION_UUID_MSB) {
             SkinManager.handleBedrockSkin(playerEntity, session.getClientData());
         }
 
