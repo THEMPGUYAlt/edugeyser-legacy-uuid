@@ -1,4 +1,6 @@
-# EduGeyser
+# EduGeyser (legacy UUID variant)
+
+> **Legacy UUID variant.** For deployments whose existing education player data is keyed by the pre-OID `SHA-256(tenantId:username)` UUID scheme. If you are setting up a new server or have no existing education player data, use the regular [EduGeyser](https://github.com/SendableMetatype/EduGeyser) instead, which uses a cryptographically stronger identity derived from the MESS-verified Entra OID.
 
 A [Geyser](https://github.com/GeyserMC/Geyser) fork that enables **Minecraft Education Edition** clients to join **Java Edition** servers. Both Education and regular Bedrock players can connect to the same server simultaneously.
 
@@ -8,12 +10,12 @@ A [Geyser](https://github.com/GeyserMC/Geyser) fork that enables **Minecraft Edu
 - Students from any school or tenant can join without server-side configuration
 - Verified player identity via Microsoft Education Services
 - Education player skins visible to Java players via the [EduGeyser Signing Relay](https://github.com/SendableMetatype/EduGeyser-Signing-Relay)
-- [Floodgate](https://github.com/SendableMetatype/EduFloodgate) integration with education-specific UUIDs and username formatting
+- [Floodgate](https://github.com/SendableMetatype/edufloodgate-legacy-uuid) integration with education-specific UUIDs and username formatting
 - [Geyser Education Extension](https://github.com/SendableMetatype/Geyser-Education-Extension) providing join codes, connection IDs, and server list broadcasting for student access
 
 ## Downloads
 
-Pre-built jars are available on the [Releases](https://github.com/SendableMetatype/EduGeyser/releases) page.
+Pre-built jars are available on the [Releases](https://github.com/SendableMetatype/edugeyser-legacy-uuid/releases) page.
 
 ## Documentation
 
