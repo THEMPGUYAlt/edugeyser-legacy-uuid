@@ -50,6 +50,8 @@ import org.geysermc.mcprotocollib.protocol.packet.handshake.serverbound.ClientIn
 
 import java.net.ConnectException;
 import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.util.UUID;
 
 public class GeyserSessionAdapter extends SessionAdapter {
@@ -147,9 +149,9 @@ public class GeyserSessionAdapter extends SessionAdapter {
             // Set what our UUID *probably* is going to be
             if (session.remoteServer().authType() == AuthType.FLOODGATE) {
                 if (session.isEducationClient()) {
-                    // Education clients are guaranteed to have a verified MESS token at this point
-                    // (LoginEncryptionUtils rejects them otherwise). The xuid is the Entra OID.
-                    uuid = createEducationUuid(session.xuid());
+                    // Legacy UUID scheme: derive from tenantId + username instead of the OID.
+                    // Preserved for deployments with existing player data keyed by this scheme.
+                    uuid = createEducationUuid(session.getEducationTenantId(), session.bedrockUsername());
                 } else {
                     uuid = new UUID(0, Long.parseLong(session.xuid()));
                 }
@@ -252,29 +254,27 @@ public class GeyserSessionAdapter extends SessionAdapter {
     }
 
     /**
-     * Generate a stable, unique UUID for education players from their Entra OID.
-     * The OID is a UUID v4 assigned by Microsoft to an Entra account. It is
-     * cryptographically signed in the MESS token, immutable, and globally unique.
-     * A person with multiple Entra accounts has multiple OIDs, the same way a
-     * person with multiple Xbox accounts has multiple xuids.
-     *
-     * MSB is fixed so education UUIDs are distinguishable from Bedrock (MSB=0)
-     * and Java (random v4). LSB is 64 purely random bits extracted from the OID
-     * by stripping the 6 fixed UUID v4 bits (version nibble at bits 48-51,
-     * variant at bits 64-65).
+     * Legacy UUID scheme. Derives an education player's Java UUID from the SHA-256
+     * of {@code tenantId + ":" + username}, taking the first 8 hash bytes as the LSB
+     * and a fixed sentinel as the MSB to distinguish from Bedrock (MSB=0) and Java v4.
+     * <p>
+     * Preserved for deployments with existing player data keyed by this scheme. The
+     * current (non-legacy) release derives the UUID from the MESS-verified Entra OID
+     * instead, which is cryptographically bound to the client's identity.
      */
     public static final long EDUCATION_UUID_MSB = 0x0000000100000001L;
 
-    static UUID createEducationUuid(String oid) {
-        UUID parsed = UUID.fromString(oid);
-        long msb = parsed.getMostSignificantBits();
-        long lsb = parsed.getLeastSignificantBits();
-
-        // Strip version nibble (bits 48-51) and variant (bits 64-65),
-        // pack first 64 purely random bits left-to-right:
-        //   bits 0-47 (48 random) + bits 52-63 (12 random) + bits 66-69 (4 random) = 64
-        long upper = ((msb >>> 16) << 12) | (msb & 0xFFF);  // 60 random bits
-        long lower = (lsb << 2) >>> 60;                       // 4 random bits
-        return new UUID(EDUCATION_UUID_MSB, (upper << 4) | lower);
+    static UUID createEducationUuid(String tenantId, String username) {
+        try {
+            MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            byte[] hash = digest.digest((tenantId + ":" + username).getBytes(StandardCharsets.UTF_8));
+            long lsb = 0;
+            for (int i = 0; i < 8; i++) {
+                lsb = (lsb << 8) | (hash[i] & 0xFF);
+            }
+            return new UUID(EDUCATION_UUID_MSB, lsb);
+        } catch (NoSuchAlgorithmException e) {
+            throw new AssertionError("SHA-256 not available", e);
+        }
     }
 }
