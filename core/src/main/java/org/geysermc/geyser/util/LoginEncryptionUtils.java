@@ -142,10 +142,15 @@ public class LoginEncryptionUtils {
                 session.setEducationTenantId(tokenResult.getTenantId());
                 session.setEducationServerToken(serverToken);
 
-                // Swap to the education codec now that we know this is an education session.
-                // The codec differs from the standard one only in StartGamePacket serialization,
-                // but encoding is deferred to Netty's event loop so we can't safely swap
-                // temporarily just for StartGame; it has to be permanent from here on.
+                // Swap to the education codec. A swap is structurally unavoidable.
+                // The initial codec is chosen when RequestNetworkSettingsPacket
+                // arrives, and at that point only the protocol version is known.
+                // Education clients report the same protocol version as standard
+                // Bedrock, so the pre-auth flow has no way to distinguish them.
+                // The education flag only surfaces when LoginPacket's clientData
+                // is parsed, which is where this code runs. So every education
+                // session starts on the standard codec and swaps to the education
+                // one here.
                 BedrockCodec educationCodec = GameProtocol.getEducationCodec(
                         session.getUpstream().getSession().getCodec().getProtocolVersion());
                 if (educationCodec != null) {
