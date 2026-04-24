@@ -77,10 +77,6 @@ public class LoginEncryptionUtils {
             ChainValidationResult result = EncryptionUtils.validatePayload(authPayload);
 
             geyser.getLogger().debug(String.format("Is player data signed? %s", result.signed()));
-            if (!result.signed() && session.getGeyser().config().advanced().bedrock().validateBedrockLogin()) {
-                session.disconnect(GeyserLocale.getLocaleStringLog("geyser.network.remote.invalid_xbox_account"));
-                return;
-            }
 
             // Should always be present, but hey, why not make it safe :D
             Long rawIssuedAt = (Long) result.rawIdentityClaims().get("iat");
