@@ -261,8 +261,8 @@ public final class FloodgateSkinUploader {
     }
 
     private void uploadEducationSkin(GeyserSession session, String clientData) {
-        // Run async to avoid blocking the session thread with the HTTP call
-        session.getGeyser().getScheduledThread().execute(() -> {
+        // Run on the dedicated skin thread pool to avoid blocking Geyser's global scheduler
+        SkinProvider.getExecutorService().execute(() -> {
             HttpURLConnection conn = null;
             try {
                 // POST the education client_data to the signing relay
