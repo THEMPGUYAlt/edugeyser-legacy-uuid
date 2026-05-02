@@ -32,6 +32,8 @@ import io.netty.channel.ChannelHandler;
 import io.netty.channel.ChannelHandlerContext;
 import io.netty.channel.ChannelInboundHandlerAdapter;
 import io.netty.util.AttributeKey;
+import io.netty.util.internal.logging.InternalLogger;
+import io.netty.util.internal.logging.InternalLoggerFactory;
 import org.cloudburstmc.netty.channel.raknet.packet.RakMessage;
 
 import java.nio.charset.StandardCharsets;
@@ -77,12 +79,15 @@ public final class BedrockEncryptionControl {
     }
 
     private static final class ServerHandler extends ChannelInboundHandlerAdapter {
+        private static final InternalLogger log = InternalLoggerFactory.getInstance(ServerHandler.class);
+
         @Override
         public void channelRead(ChannelHandlerContext ctx, Object msg) throws Exception {
             ctx.pipeline().remove(this);
 
             if (msg instanceof RakMessage rakMessage && isDisableEncryptionRequest(rakMessage.content())) {
                 ctx.channel().attr(DISABLE_ENCRYPTION).set(true);
+                log.debug("Bedrock encryption disabled for {}", ctx.channel().remoteAddress());
                 rakMessage.release();
                 return;
             }
