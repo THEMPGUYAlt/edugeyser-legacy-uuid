@@ -2525,7 +2525,11 @@ public class GeyserSession implements GeyserConnection, GeyserCommandSource {
             return 0;
         }
 
-        RakSessionCodec rakSessionCodec = ((RakChildChannel) getUpstream().getSession().getPeer().getChannel()).rakPipeline().get(RakSessionCodec.class);
+        Channel channel = getUpstream().getSession().getPeer().getChannel();
+        if (!(channel instanceof RakChildChannel rakChannel)) {
+            return 0; // Nethernet channels don't have RakNet-level ping
+        }
+        RakSessionCodec rakSessionCodec = rakChannel.rakPipeline().get(RakSessionCodec.class);
         return (int) Math.floor(rakSessionCodec.getPing());
     }
 

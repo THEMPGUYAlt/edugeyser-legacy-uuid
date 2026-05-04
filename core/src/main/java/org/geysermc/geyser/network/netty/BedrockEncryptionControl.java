@@ -56,6 +56,15 @@ public final class BedrockEncryptionControl {
         return channel.writeAndFlush(marker);
     }
 
+    /**
+     * Directly disables Bedrock encryption for a channel. Used by the
+     * Nethernet initializer where we control the pipeline setup and don't
+     * need the in-band marker mechanism.
+     */
+    public static void disableEncryption(Channel channel) {
+        channel.attr(DISABLE_ENCRYPTION).set(true);
+    }
+
     public static boolean isEncryptionDisabled(Channel channel) {
         return Boolean.TRUE.equals(channel.attr(DISABLE_ENCRYPTION).get());
     }

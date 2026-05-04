@@ -106,6 +106,8 @@ public final class GeyserServer {
     private EventLoopGroup childGroup;
     private final ServerBootstrap bootstrap;
     private EventLoopGroup playerGroup;
+    @Getter
+    private GeyserServerInitializer initializer;
 
     @Getter
     private final ExpiringMap<InetSocketAddress, InetSocketAddress> proxiedAddresses;
@@ -237,8 +239,8 @@ public final class GeyserServer {
         boolean rakSendCookie = Boolean.parseBoolean(System.getProperty("Geyser.RakSendCookie", "true"));
         this.geyser.getLogger().debug("Setting RakNet send cookie to " + rakSendCookie);
 
-        GeyserServerInitializer serverInitializer = new GeyserServerInitializer(this.geyser, rakSendCookie);
-        playerGroup = serverInitializer.getEventLoopGroup();
+        this.initializer = new GeyserServerInitializer(this.geyser, rakSendCookie);
+        playerGroup = initializer.getEventLoopGroup();
 
         return new ServerBootstrap()
             .channelFactory(RakChannelFactory.server(TRANSPORT.datagramChannelClass()))
@@ -248,7 +250,7 @@ public final class GeyserServer {
             .option(RakChannelOption.RAK_PACKET_LIMIT, rakPacketLimit)
             .option(RakChannelOption.RAK_GLOBAL_PACKET_LIMIT, rakGlobalPacketLimit)
             .option(RakChannelOption.RAK_SERVER_COOKIE_MODE, rakSendCookie ? RakServerCookieMode.ACTIVE : RakServerCookieMode.INVALID)
-            .childHandler(serverInitializer);
+            .childHandler(initializer);
     }
 
     public boolean onConnectionRequest(InetSocketAddress inetSocketAddress) {

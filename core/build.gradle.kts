@@ -55,6 +55,15 @@ dependencies {
         exclude("io.netty", "*")
     }
 
+    // Nethernet (WebRTC) transport for Education Edition and Xbox peer connections
+    implementation(libs.nethernet) {
+        exclude("io.netty", "*")
+    }
+    implementation(libs.webrtc.java)
+    listOf("windows-x86_64", "windows-aarch64", "linux-x86_64", "linux-aarch64", "macos-x86_64", "macos-aarch64").forEach { platform ->
+        runtimeOnly("dev.kastle.webrtc:webrtc-java:${libs.versions.webrtc.java.get()}:$platform")
+    }
+
 
     // Network dependencies we are updating ourselves
     api(libs.netty.handler)

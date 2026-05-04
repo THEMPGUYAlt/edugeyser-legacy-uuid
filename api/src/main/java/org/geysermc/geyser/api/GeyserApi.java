@@ -36,6 +36,7 @@ import org.geysermc.geyser.api.event.EventBus;
 import org.geysermc.geyser.api.event.EventRegistrar;
 import org.geysermc.geyser.api.extension.ExtensionManager;
 import org.geysermc.geyser.api.network.BedrockListener;
+import org.geysermc.geyser.api.network.NethernetManager;
 import org.geysermc.geyser.api.network.RemoteServer;
 import org.geysermc.geyser.api.util.MinecraftVersion;
 import org.geysermc.geyser.api.util.PlatformType;
@@ -114,6 +115,16 @@ public interface GeyserApi extends GeyserApiBase {
      */
     @NonNull
     BedrockListener bedrockListener();
+
+    /**
+     * Gets the {@link NethernetManager} for controlling the Nethernet
+     * (WebRTC) transport server, or null if Nethernet support is
+     * unavailable (e.g. WebRTC native libraries failed to load).
+     *
+     * @return the Nethernet manager, or null if unavailable
+     */
+    @Nullable
+    NethernetManager nethernetManager();
 
     /**
      * Gets the {@link Path} to the Geyser config directory.

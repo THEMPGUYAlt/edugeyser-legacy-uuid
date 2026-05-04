@@ -44,13 +44,17 @@ import java.net.InetSocketAddress;
 public class GeyserServerInitializer extends BedrockServerInitializer {
     private final GeyserImpl geyser;
     private final boolean rakCookiesEnabled;
-    // There is a constructor that doesn't require inputting threads, but older Netty versions don't have it
     @Getter
-    private final DefaultEventLoopGroup eventLoopGroup = new DefaultEventLoopGroup(0, new DefaultThreadFactory("Geyser player thread"));
+    private final DefaultEventLoopGroup eventLoopGroup;
 
     public GeyserServerInitializer(GeyserImpl geyser, boolean rakCookiesEnabled) {
+        this(geyser, rakCookiesEnabled, new DefaultEventLoopGroup(0, new DefaultThreadFactory("Geyser player thread")));
+    }
+
+    public GeyserServerInitializer(GeyserImpl geyser, boolean rakCookiesEnabled, DefaultEventLoopGroup eventLoopGroup) {
         this.geyser = geyser;
         this.rakCookiesEnabled = rakCookiesEnabled;
+        this.eventLoopGroup = eventLoopGroup;
     }
 
     @Override
@@ -72,20 +76,28 @@ public class GeyserServerInitializer extends BedrockServerInitializer {
                 }
             }
 
-            bedrockServerSession.setLogging(this.geyser.config().debugMode());
-            GeyserSession session = new GeyserSession(this.geyser, bedrockServerSession, this.eventLoopGroup.next());
-
-            if (!bedrockServerSession.isSubClient()) {
-                Channel channel = bedrockServerSession.getPeer().getChannel();
-                channel.pipeline().addAfter(BedrockPacketCodec.NAME, InvalidPacketHandler.NAME, new InvalidPacketHandler(session));
-            }
-
-            bedrockServerSession.setPacketHandler(new UpstreamPacketHandler(this.geyser, session));
+            initGeyserSession(bedrockServerSession, this.geyser, this.eventLoopGroup);
         } catch (Throwable e) {
             // Error must be caught or it will be swallowed
             this.geyser.getLogger().error("Error occurred while initializing player!", e);
             bedrockServerSession.disconnect(e.getMessage());
         }
+    }
+
+    /**
+     * Shared session initialization used by both RakNet and Nethernet initializers.
+     */
+    public static void initGeyserSession(BedrockServerSession bedrockServerSession, GeyserImpl geyser,
+                                   DefaultEventLoopGroup eventLoopGroup) {
+        bedrockServerSession.setLogging(geyser.config().debugMode());
+        GeyserSession session = new GeyserSession(geyser, bedrockServerSession, eventLoopGroup.next());
+
+        if (!bedrockServerSession.isSubClient()) {
+            Channel channel = bedrockServerSession.getPeer().getChannel();
+            channel.pipeline().addAfter(BedrockPacketCodec.NAME, InvalidPacketHandler.NAME, new InvalidPacketHandler(session));
+        }
+
+        bedrockServerSession.setPacketHandler(new UpstreamPacketHandler(geyser, session));
     }
 
     @Override

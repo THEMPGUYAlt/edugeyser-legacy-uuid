@@ -17,6 +17,8 @@ protocol-connection = "3.0-SNAPSHOT"
 protocol-common = "3.0-SNAPSHOT"
 protocol-codec = "3.0-SNAPSHOT"
 raknet = "1.0.0.CR3-20260421.190401-34"
+nethernet = "1.7.0-edugeyser.1"
+webrtc-java = "1.0.3"
 minecraftauth = "5.0.0"
 mcprotocollib = "1.21.11-20260217.182735-13"
 adventure = "4.25.0"
@@ -145,6 +147,8 @@ junit = { group = "org.junit.jupiter", name = "junit-jupiter", version.ref = "ju
 minecraftauth = { group = "net.raphimc", name = "MinecraftAuth", version.ref = "minecraftauth" }
 mcprotocollib = { group = "org.geysermc.mcprotocollib", name = "protocol", version.ref = "mcprotocollib" }
 raknet = { group = "org.cloudburstmc.netty", name = "netty-transport-raknet", version.ref = "raknet" }
+nethernet = { group = "com.github.SendableMetatype.NetworkCompatible", name = "netty-transport-nethernet", version.ref = "nethernet" }
+webrtc-java = { group = "dev.kastle.webrtc", name = "webrtc-java", version.ref = "webrtc-java" }
 terminalconsoleappender = { group = "net.minecrell", name = "terminalconsoleappender", version.ref = "terminalconsoleappender" }
 velocity-proxy = { group = "com.velocitypowered", name = "velocity-proxy", version.ref = "velocity" }
 velocity-api = { group = "com.velocitypowered", name = "velocity-api", version.ref = "velocity" }

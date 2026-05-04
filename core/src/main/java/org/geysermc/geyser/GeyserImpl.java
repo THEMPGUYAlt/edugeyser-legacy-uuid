@@ -67,6 +67,7 @@ import org.geysermc.geyser.api.event.lifecycle.GeyserRegisterPermissionsEvent;
 import org.geysermc.geyser.api.event.lifecycle.GeyserShutdownEvent;
 import org.geysermc.geyser.api.network.AuthType;
 import org.geysermc.geyser.api.network.BedrockListener;
+import org.geysermc.geyser.api.network.NethernetManager;
 import org.geysermc.geyser.api.network.RemoteServer;
 import org.geysermc.geyser.api.util.MinecraftVersion;
 import org.geysermc.geyser.api.util.PlatformType;
@@ -82,6 +83,7 @@ import org.geysermc.geyser.impl.MinecraftVersionImpl;
 import org.geysermc.geyser.level.BedrockDimension;
 import org.geysermc.geyser.level.WorldManager;
 import org.geysermc.geyser.network.GameProtocol;
+import org.geysermc.geyser.network.nethernet.NethernetManagerImpl;
 import org.geysermc.geyser.network.netty.GeyserServer;
 import org.geysermc.geyser.ping.GeyserLegacyPingPassthrough;
 import org.geysermc.geyser.registry.BlockRegistries;
@@ -116,6 +118,7 @@ import java.lang.reflect.Type;
 import java.net.InetAddress;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.security.Key;
 import java.text.DecimalFormat;
@@ -169,6 +172,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
     private ScheduledExecutorService scheduledThread;
 
     private GeyserServer geyserServer;
+    private NethernetManagerImpl nethernetManagerImpl;
     private final GeyserBootstrap bootstrap;
 
     private final GeyserEventBus eventBus;
@@ -489,6 +493,9 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
                 }
             }).join();
 
+        // Initialize Nethernet (WebRTC) transport
+        initializeNethernet();
+
         if (config.java().authType() == AuthType.FLOODGATE) {
             try {
                 Key key = new AesKeyProducer().produceFrom(bootstrap.getFloodgateKeyPath());
@@ -578,6 +585,67 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
         return session.transfer(address, port);
     }
 
+    private void initializeNethernet() {
+        GeyserLogger log = getLogger();
+        try {
+            String connectionId = loadOrGenerateConnectionId(log);
+            if (connectionId == null) {
+                return;
+            }
+
+            var playerGroup = this.geyserServer.getInitializer().getEventLoopGroup();
+            this.nethernetManagerImpl = new NethernetManagerImpl(this, playerGroup, connectionId);
+            log.debug("[Nethernet] Transport initialized");
+        } catch (Throwable t) {
+            log.warning("[Nethernet] Transport unavailable: " + t.getMessage());
+            if (config().debugMode()) {
+                t.printStackTrace();
+            }
+            this.nethernetManagerImpl = null;
+        }
+    }
+
+    private String loadOrGenerateConnectionId(GeyserLogger log) {
+        Path nethernetDir = bootstrap.getConfigFolder().resolve("nethernet");
+        Path idFile = nethernetDir.resolve("connection-id.yml");
+
+        try {
+            if (Files.exists(idFile)) {
+                var loader = org.spongepowered.configurate.yaml.YamlConfigurationLoader.builder()
+                        .path(idFile).build();
+                var node = loader.load();
+                String id = node.node("connection-id").getString();
+                if (id != null) {
+                    id = id.trim();
+                    if (id.matches("^[0-9]{10,19}$")) {
+                        return id;
+                    }
+                    log.error("[Nethernet] Invalid connection ID in " + idFile + ": " + id +
+                            " (must be 10-19 decimal digits). Delete the file to regenerate.");
+                    return null;
+                }
+            }
+
+            // Generate a new 18-digit connection ID
+            Files.createDirectories(nethernetDir);
+            long value = java.util.concurrent.ThreadLocalRandom.current()
+                    .nextLong(100_000_000_000_000_000L, 1_000_000_000_000_000_000L);
+            String connectionId = String.valueOf(value);
+
+            Files.writeString(idFile,
+                    "# Nethernet connection ID. Clients enter this to connect via WebRTC.\n" +
+                    "# Auto-generated. Delete this file to regenerate.\n" +
+                    "# Must be 10-19 decimal digits.\n" +
+                    "connection-id: \"" + connectionId + "\"\n");
+
+            log.debug("[Nethernet] Generated connection ID: " + connectionId);
+            return connectionId;
+        } catch (Exception e) {
+            log.error("[Nethernet] Failed to load/generate connection ID: " + e.getMessage());
+            return null;
+        }
+    }
+
     public void disable() {
         bootstrap.getGeyserLogger().info(GeyserLocale.getLocaleStringLog("geyser.core.shutdown"));
 
@@ -587,6 +655,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             bootstrap.getGeyserLogger().info(GeyserLocale.getLocaleStringLog("geyser.core.shutdown.kick.done"));
         }
 
+        runIfNonNull(nethernetManagerImpl, NethernetManagerImpl::shutdown);
         runIfNonNull(scheduledThread, ScheduledExecutorService::shutdown);
         runIfNonNull(geyserServer, GeyserServer::shutdown);
         runIfNonNull(skinUploader, FloodgateSkinUploader::close);
@@ -678,6 +747,11 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
     @NonNull
     public BedrockListener bedrockListener() {
         return config().bedrock();
+    }
+
+    @Override
+    public @Nullable NethernetManager nethernetManager() {
+        return nethernetManagerImpl;
     }
 
     @Override
