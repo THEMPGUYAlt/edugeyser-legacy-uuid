@@ -617,11 +617,11 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
                 String id = node.node("connection-id").getString();
                 if (id != null) {
                     id = id.trim();
-                    if (id.matches("^[0-9]{10,19}$")) {
+                    if (id.matches("^[0-9]{10,18}$")) {
                         return id;
                     }
                     log.error("[Nethernet] Invalid connection ID in " + idFile + ": " + id +
-                            " (must be 10-19 decimal digits). Delete the file to regenerate.");
+                            " (must be 10-18 decimal digits). Delete the file to regenerate.");
                     return null;
                 }
             }
@@ -635,7 +635,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             Files.writeString(idFile,
                     "# Nethernet connection ID. Clients enter this to connect via WebRTC.\n" +
                     "# Auto-generated. Delete this file to regenerate.\n" +
-                    "# Must be 10-19 decimal digits.\n" +
+                    "# Must be 10-18 decimal digits.\n" +
                     "connection-id: \"" + connectionId + "\"\n");
 
             log.debug("[Nethernet] Generated connection ID: " + connectionId);
