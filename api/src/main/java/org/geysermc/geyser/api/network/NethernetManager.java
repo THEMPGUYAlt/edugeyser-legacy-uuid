@@ -75,9 +75,9 @@ public interface NethernetManager {
 
     /**
      * Gets the connection ID that Nethernet clients use to connect.
-     * This is persisted in Geyser's config and stable across restarts.
+     * Persisted in {@code nethernet/connection-id.yml} and stable across restarts.
      *
-     * @return the connection ID (10-19 decimal digits)
+     * @return the connection ID (10-18 decimal digits)
      */
     @NonNull
     String getConnectionId();
