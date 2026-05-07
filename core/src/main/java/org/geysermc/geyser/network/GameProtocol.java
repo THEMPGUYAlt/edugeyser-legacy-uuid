@@ -96,7 +96,7 @@ public final class GameProtocol {
 
         registerEducation(Bedrock_v898.EDUCATION_CODEC);
 
-        MinecraftVersion latestBedrock = SUPPORTED_BEDROCK_VERSIONS.get(SUPPORTED_BEDROCK_VERSIONS.size() - 1);
+        MinecraftVersion latestBedrock = SUPPORTED_BEDROCK_VERSIONS.getLast();
         DEFAULT_BEDROCK_VERSION = latestBedrock.versionString();
         DEFAULT_BEDROCK_PROTOCOL = latestBedrock.protocolVersion();
     }

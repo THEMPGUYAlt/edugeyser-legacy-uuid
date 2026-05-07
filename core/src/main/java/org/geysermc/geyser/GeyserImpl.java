@@ -104,6 +104,7 @@ import org.geysermc.geyser.text.MinecraftLocale;
 import org.geysermc.geyser.translator.text.MessageTranslator;
 import org.geysermc.geyser.util.AssetUtils;
 import org.geysermc.geyser.util.CodeOfConductManager;
+import org.geysermc.geyser.util.InternalPlatformType;
 import org.geysermc.geyser.util.JsonUtils;
 import org.geysermc.geyser.util.NewsHandler;
 import org.geysermc.geyser.util.VersionCheckUtils;
@@ -265,6 +266,7 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
                 return;
             }
 
+            MinecraftLocale.downloadDeprecations();
             MinecraftLocale.ensureEN_US();
             String locale = GeyserLocale.getDefaultLocale();
             if (!"en_us".equals(locale)) {
@@ -337,6 +339,17 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             logger.error("XBOX AUTHENTICATION IS DISABLED ON THIS GEYSER INSTANCE!");
             logger.error("While this allows using Bedrock edition proxies, it also opens up the ability for hackers to connect with any username they choose.");
             logger.error("To change this, set \"disable-xbox-auth\" to \"false\" in Geyser's config file.");
+        }
+
+        pendingMicrosoftAuthentication = new PendingMicrosoftAuthentication(config.pendingAuthenticationTimeout());
+
+        Packets.initGeyser();
+
+        BedrockDimension.changeBedrockNetherId(config.gameplay().netherRoofWorkaround()); // Apply End dimension ID workaround to Nether
+
+        if (platformType() == InternalPlatformType.GAMETEST) {
+            // Note: not firing post reload/init events on gametest platform
+            return;
         }
 
         String geyserUdpPort = System.getProperty("geyserUdpPort", "");
@@ -451,19 +464,13 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
             logger.warning("The use-direct-connection config option is deprecated. Please reach out to us on Discord if there's a reason it needs to be disabled.");
         }
 
-        pendingMicrosoftAuthentication = new PendingMicrosoftAuthentication(config.pendingAuthenticationTimeout());
-
         this.newsHandler = new NewsHandler(BRANCH, this.buildNumber());
-
-        Packets.initGeyser();
 
         if (Epoll.isAvailable()) {
             this.erosionUnixListener = new UnixSocketClientListener();
         } else {
             logger.debug("Epoll is not available; Erosion's Unix socket handling will not work.");
         }
-
-        BedrockDimension.changeBedrockNetherId(config.gameplay().netherRoofWorkaround()); // Apply End dimension ID workaround to Nether
 
         int bedrockThreadCount = Integer.getInteger("Geyser.BedrockNetworkThreads", -1);
         if (bedrockThreadCount == -1) {
@@ -667,7 +674,9 @@ public class GeyserImpl implements GeyserApi, EventRegistrar {
         }
 
         ResourcePackLoader.clear();
-        CodeOfConductManager.trySave();
+        if (platformType() != InternalPlatformType.GAMETEST) {
+            CodeOfConductManager.trySave();
+        }
 
         this.setEnabled(false);
     }

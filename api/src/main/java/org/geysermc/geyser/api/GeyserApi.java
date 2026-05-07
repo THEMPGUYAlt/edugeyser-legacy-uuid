@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2019-2022 GeyserMC. http://geysermc.org
+ * Copyright (c) 2019-2026 GeyserMC. http://geysermc.org
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to deal
@@ -25,8 +25,6 @@
 
 package org.geysermc.geyser.api;
 
-import org.checkerframework.checker.nullness.qual.NonNull;
-import org.checkerframework.checker.nullness.qual.Nullable;
 import org.geysermc.api.Geyser;
 import org.geysermc.api.GeyserApiBase;
 import org.geysermc.api.util.ApiVersion;
@@ -41,6 +39,7 @@ import org.geysermc.geyser.api.network.RemoteServer;
 import org.geysermc.geyser.api.util.MinecraftVersion;
 import org.geysermc.geyser.api.util.PlatformType;
 import org.jetbrains.annotations.ApiStatus;
+import org.jspecify.annotations.Nullable;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -55,18 +54,17 @@ public interface GeyserApi extends GeyserApiBase {
      * {@inheritDoc}
      */
     @Override
-    @Nullable GeyserConnection connectionByUuid(@NonNull UUID uuid);
+    @Nullable GeyserConnection connectionByUuid(UUID uuid);
 
     /**
      * {@inheritDoc}
      */
     @Override
-    @Nullable GeyserConnection connectionByXuid(@NonNull String xuid);
+    @Nullable GeyserConnection connectionByXuid(String xuid);
 
     /**
      * {@inheritDoc}
      */
-    @NonNull
     List<? extends GeyserConnection> onlineConnections();
 
     /**
@@ -74,7 +72,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the extension manager
      */
-    @NonNull
     ExtensionManager extensionManager();
 
     /**
@@ -86,8 +83,7 @@ public interface GeyserApi extends GeyserApiBase {
      * @throws IllegalArgumentException if there is no provider for the specified API class
      * @return the builder instance
      */
-    @NonNull
-    <R extends T, T> R provider(@NonNull Class<T> apiClass, @Nullable Object... args);
+    <R extends T, T> R provider(Class<T> apiClass, @Nullable Object... args);
 
     /**
      * Gets the {@link EventBus} for handling
@@ -95,7 +91,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the event bus
      */
-    @NonNull
     EventBus<EventRegistrar> eventBus();
 
     /**
@@ -104,7 +99,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the default remote server used within Geyser
      */
-    @NonNull
     RemoteServer defaultRemoteServer();
 
     /**
@@ -113,7 +107,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the listener used for Bedrock client connectins
      */
-    @NonNull
     BedrockListener bedrockListener();
 
     /**
@@ -131,7 +124,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the path to the Geyser config directory
      */
-    @NonNull
     Path configDirectory();
 
     /**
@@ -139,7 +131,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the path to the Geyser packs directory
      */
-    @NonNull
     Path packDirectory();
 
     /**
@@ -147,7 +138,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return type of platform
      */
-    @NonNull
     PlatformType platformType();
 
     /**
@@ -155,7 +145,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the supported version of Java Minecraft
      */
-    @NonNull
     MinecraftVersion supportedJavaVersion();
 
     /**
@@ -163,7 +152,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the list of supported Bedrock Minecraft versions
      */
-    @NonNull
     List<MinecraftVersion> supportedBedrockVersions();
 
     /**
@@ -171,7 +159,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the console command source
      */
-    @NonNull
     CommandSource consoleCommandSource();
 
     /**
@@ -179,7 +166,6 @@ public interface GeyserApi extends GeyserApiBase {
      *
      * @return the current geyser api instance
      */
-    @NonNull
     static GeyserApi api() {
         return Geyser.api(GeyserApi.class);
     }
