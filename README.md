@@ -21,9 +21,9 @@ Pre-built jars are available on the [Releases](https://github.com/SendableMetaty
 
 ## Documentation
 
-- **[Setup Guide](https://github.com/SendableMetatype/EduGeyser/blob/full/SETUP-GUIDE.md)** - How to install and get students connected
-- **[MESS Tooling Reference](https://github.com/SendableMetatype/EduGeyser/blob/full/MESS-Tooling-Notebook-Reference.md)** - Technical reference for the Microsoft Education Server Services API
-- **[Master Documentation](https://github.com/SendableMetatype/EduGeyser/blob/full/edugeyser-master-documentation.md)** - Authentication flow, protocol differences, and MESS API details
+- **[Setup Guide](https://github.com/THEMPGUYAlt/EduGeyser/blob/full/SETUP-GUIDE.md)** - How to install and get students connected
+- **[MESS Tooling Reference](https://github.com/THEMPGUYAlt/EduGeyser/blob/full/MESS-Tooling-Notebook-Reference.md)** - Technical reference for the Microsoft Education Server Services API
+- **[Master Documentation](https://github.com/THEMPGUYAlt/EduGeyser/blob/full/edugeyser-master-documentation.md)** - Authentication flow, protocol differences, and MESS API details
 
 ---
 
