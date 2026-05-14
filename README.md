@@ -1,4 +1,6 @@
 # EduGeyser (legacy UUID variant)
+> [!CAUTION]
+> THIS IS A LEGACY UUID VERSION, THE MAIN PROJECT GOT DCMA'ED
 
 > **Legacy UUID variant.** For deployments whose existing education player data is keyed by the pre-OID `SHA-256(tenantId:username)` UUID scheme. If you are setting up a new server or have no existing education player data, use the regular [EduGeyser](https://github.com/SendableMetatype/EduGeyser) instead, which uses a cryptographically stronger identity derived from the MESS-verified Entra OID.
 
